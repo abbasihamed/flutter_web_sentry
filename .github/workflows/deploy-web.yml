@@ -4,46 +4,47 @@ on:
   push:
     branches: [main]
 
-env:
-  FLUTTER_VERSION: "3.22.7"   # pin to the version you use
-
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
 
     steps:
-      # 1. Checkout
       - name: Checkout
         uses: actions/checkout@v4
 
-      # 2. Flutter
+      - name: Test Flutter releases connectivity
+        run: curl -fsS "https://storage.googleapis.com/flutter_infra_release/releases/releases_linux.json"
+
+      - name: Fix Flutter SDK folder permission
+        run: git config --global --add safe.directory /tmp/flutter/--
+
       - name: Install Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: "3.22.7"   # or omit this line to get the latest stable
           channel: stable
-          cache: true
+          flutter-version: 3.22.6 # last confirmed stable before 3.22.7
 
-      # 3. Install dependencies
+      - name: Checkout Flutter 3.22.7
+        run: |
+          cd $FLUTTER_ROOT
+          git fetch --tags
+          git checkout 3.22.7
+          flutter --version
+
       - name: Get packages
         run: flutter pub get
 
-      # 4. Build web with source maps
-      - name: Build web
+      - name: Build web with source maps
         run: flutter build web --release --source-maps
 
-      # 5. Compute deterministic release/dist
-      - name: Set release/dist
+      - name: Set release and dist vars
         id: vars
         run: |
-          # use the commit SHA as the dist so every push is unique
           echo "RELEASE=test_sentry_web@${{ github.ref_name }}+${{ github.run_number }}" >> $GITHUB_OUTPUT
           echo "DIST=${{ github.sha }}" >> $GITHUB_OUTPUT
 
-      # 6. Upload source maps
       - name: Install Sentry CLI
-        run: |
-          curl -sL https://sentry.io/get-cli/ | bash
+        run: curl -sL https://sentry.io/get-cli/ | bash
 
       - name: Upload source maps
         env:
@@ -59,7 +60,6 @@ jobs:
             --rewrite
           sentry-cli releases finalize "${{ steps.vars.outputs.RELEASE }}"
 
-      # 7. Deploy (GitHub Pages example)
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v4
         with:
