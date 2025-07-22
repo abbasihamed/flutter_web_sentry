@@ -13,6 +13,8 @@ Future<void> main() async {
   );
   const dist = String.fromEnvironment('SENTRY_DIST', defaultValue: 'local');
 
+  print('Running with release: $release dist: $dist');
+
   await SentryFlutter.init((options) {
     options.dsn =
         'https://a6e7985b56f267c8d1eacaff7445120e@o4509711535898624.ingest.de.sentry.io/4509711539568720';
