@@ -20,9 +20,8 @@ jobs:
       - name: Install Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: stable
-          cache: true
+          flutter-version: 3.32.7  # latest stable including Dart 3.8.1
 
       # 3. Install dependencies
       - name: Get packages
