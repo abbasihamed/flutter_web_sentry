@@ -40,11 +40,13 @@ jobs:
           echo "DIST=${{ github.sha }}" >> $GITHUB_OUTPUT
 
       # 6. Upload source maps
-      - name: Debug Sentry config
-        env:
-          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
-          SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
-          SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
+      - name: Setup Sentry CLI
+        uses: matbour/setup-sentry-cli@v2
+        with:
+          version: latest
+          token: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          organization: ${{ secrets.SENTRY_ORG }}
+          project: ${{ secrets.SENTRY_PROJECT }}
         run: |
           echo "Auth Token:" $SENTRY_AUTH_TOKEN
           sentry-cli info
