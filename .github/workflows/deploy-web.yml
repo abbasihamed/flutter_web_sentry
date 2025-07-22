@@ -3,6 +3,10 @@ name: Build & Deploy Flutter Web
 on:
   push:
     branches: [main]
+    
+permissions:
+  contents: read
+  pages: write
 
 env:
   FLUTTER_VERSION: "3.22.0"   # pin to the version you use
@@ -67,16 +71,8 @@ jobs:
 
 
       # 7. Deploy (GitHub Pages example)
-    jobs:
-      build-and-deploy:
-        permissions:
-          contents: read
-          pages: write         # Allow pushing to GH-Pages branch
-        runs-on: ubuntu-latest
-        steps:
-          # ...
-          - name: Deploy to GitHub Pages
-            uses: peaceiris/actions-gh-pages@v4
-            with:
-              github_token: ${{ secrets.GITHUB_TOKEN }}
-              publish_dir: build/web
+      - name: Deploy to GH Pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: build/web
