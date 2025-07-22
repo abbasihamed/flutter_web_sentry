@@ -47,10 +47,6 @@ jobs:
           token: ${{ secrets.SENTRY_AUTH_TOKEN }}
           organization: ${{ secrets.SENTRY_ORG }}
           project: ${{ secrets.SENTRY_PROJECT }}
-        run: |
-          echo "Auth Token:" $SENTRY_AUTH_TOKEN
-          sentry-cli info
-          sentry-cli projects list
 
       - name: Upload source maps
         env:
