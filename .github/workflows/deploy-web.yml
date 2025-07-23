@@ -1,78 +1,44 @@
-name: Build & Deploy Flutter Web
+name: Flutter Web → Sentry
 
 on:
   push:
     branches: [main]
-    
-permissions:
-  contents: read
-  pages: write
-
-env:
-  FLUTTER_VERSION: "3.22.0"   # pin to the version you use
 
 jobs:
-  build-and-deploy:
+  build-and-upload:
     runs-on: ubuntu-latest
-
+    env:
+      SENTRY_ORG: your-org-slug
+      SENTRY_PROJECT: your-project-slug
+      SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
     steps:
-      # 1. Checkout
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      # 2. Flutter
-      - name: Install Flutter
+      - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          channel: stable
-          flutter-version: 3.32.7  # latest stable including Dart 3.8.1
+          flutter-version: 'stable'
 
-      # 3. Install dependencies
-      - name: Get packages
+      - name: Fetch dependencies
         run: flutter pub get
 
-      # 4. Build web with source maps
-      - name: Build web
-        run: flutter build web --release --source-maps
-
-      # 5. Compute deterministic release/dist
-      - name: Set release/dist
-        id: vars
+      - name: Determine version
+        id: ver
         run: |
-          # use the commit SHA as the dist so every push is unique
-          echo "RELEASE=test_sentry_web@${{ github.ref_name }}+${{ github.run_number }}" >> $GITHUB_OUTPUT
-          echo "DIST=${{ github.sha }}" >> $GITHUB_OUTPUT
+          echo "RELEASE=web@$(date +%Y-%m-%d_%H-%M-%S)" >> $GITHUB_ENV
+          echo "DIST=CI-$(date +%s)" >> $GITHUB_ENV
 
-      # 6. Upload source maps
-      - name: Setup Sentry CLI
-        uses: matbour/setup-sentry-cli@v2
-        with:
-          version: latest
-          token: ${{ secrets.SENTRY_AUTH_TOKEN }}
-          organization: ${{ secrets.SENTRY_ORG }}
-          project: ${{ secrets.SENTRY_PROJECT }}
-
-      - name: Upload source maps
-        env:
-          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
-          SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
-          SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
+      - name: Build Flutter Web with source maps
         run: |
-          sentry-cli releases new "${{ steps.vars.outputs.RELEASE }}" \
-            --org $SENTRY_ORG --project $SENTRY_PROJECT
-          sentry-cli releases set-commits "${{ steps.vars.outputs.RELEASE }}" \
-            --auto --org $SENTRY_ORG --project $SENTRY_PROJECT
-          sentry-cli releases files "${{ steps.vars.outputs.RELEASE }}" \
-            upload-sourcemaps build/web/ \
-            --dist "${{ steps.vars.outputs.DIST }}" \
-            --rewrite --org $SENTRY_ORG --project $SENTRY_PROJECT
-          sentry-cli releases finalize "${{ steps.vars.outputs.RELEASE }}" \
-            --org $SENTRY_ORG --project $SENTRY_PROJECT
+          flutter build web \
+            --release \
+            --source-maps \
+            --dart-define=SENTRY_RELEASE=$RELEASE \
+            --dart-define=SENTRY_DIST=$DIST
 
-
-      # 7. Deploy (GitHub Pages example)
-      - name: Deploy to GH Pages
-        uses: peaceiris/actions-gh-pages@v4
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: build/web
+      - name: Upload source maps to Sentry
+        run: |
+          flutter pub run sentry_dart_plugin \
+            --sentry-define=release=$RELEASE \
+            --sentry-define=dist=$DIST \
+            --sentry-define=upload_source_maps=true
