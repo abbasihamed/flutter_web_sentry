@@ -55,7 +55,7 @@ sentry:
   commits: false
   project: flutter_test
   org: hamed-xx
-  auth_token: $SENTRY_AUTH_TOKEN
+  auth_token: ${SENTRY_AUTH_TOKEN}
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec

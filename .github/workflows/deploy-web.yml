@@ -47,7 +47,8 @@ jobs:
           flutter pub run sentry_dart_plugin \
             --sentry-define=release=$RELEASE \
             --sentry-define=dist=$DIST \
-            --sentry-define=upload_source_maps=true
+            --sentry-define=upload_source_maps=true \
+            --sentry-define=auth_token=$SENTRY_AUTH_TOKEN
             
       - name: Setup Pages
         uses: actions/configure-pages@v4
