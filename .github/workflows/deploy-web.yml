@@ -14,20 +14,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Flutter 3.22.6
-        uses: subosito/flutter-action@v2
+      - name: Set up Flutter
+      - uses: subosito/flutter-action@v2
         with:
+          flutter-version: "3.22.3"   # or omit this line to get the latest stable
           channel: stable
-          flutter-version: '3.22.6'
-
-      - name: Checkout Flutter 3.22.7
-        shell: bash
-        run: |
-          cd "$FLUTTER_ROOT"
-          git fetch --tags
-          git checkout 3.22.7
-          flutter --version
-
+          
 
       - name: Fetch dependencies
         run: flutter pub get
