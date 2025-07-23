@@ -39,6 +39,7 @@ jobs:
           flutter build web \
             --release \
             --source-maps \
+            --base-href=/test_sentry_web/ \
             --dart-define=SENTRY_RELEASE=$RELEASE \
             --dart-define=SENTRY_DIST=$DIST
 
