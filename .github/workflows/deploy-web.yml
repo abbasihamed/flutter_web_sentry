@@ -37,10 +37,7 @@ jobs:
       - name: Build Flutter Web with source maps
         run: |
           flutter build web \
-            --release \
-            --source-maps \
-            --dart-define=SENTRY_RELEASE=$RELEASE \
-            --dart-define=SENTRY_DIST=$DIST
+            --release
 
       - name: Upload source maps to Sentry
         run: |
