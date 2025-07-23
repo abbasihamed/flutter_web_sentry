@@ -51,11 +51,11 @@ dev_dependencies:
 sentry:
   upload_source_maps: true
   upload_debug_symbols: false   # not needed for web
-  upload_sources: false
+  upload_sources: true
   commits: false
   project: flutter_test
   org: hamed-xx
-  auth_token: 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
+  auth_token: $SENTRY_AUTH_TOKEN
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
