@@ -1,4 +1,4 @@
-name: Flutter Web → Sentry and GitHub Pages
+name: Flutter Web → Docker Build → Sentry + GitHub Pages
 
 on:
   push:
@@ -13,58 +13,39 @@ jobs:
   build-and-upload:
     runs-on: ubuntu-latest
     env:
-      SENTRY_ORG: hamed-xx            # اینجا slug واقعی سازمانت
-      SENTRY_PROJECT: flutter_test     # اینجا slug واقعی پروژه‌ت
+      SENTRY_ORG: hamed-xx              # 👈 slug واقعی سازمانت
+      SENTRY_PROJECT: flutter_test     # 👈 slug واقعی پروژه‌ت
       SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          flutter-version: "3.32.0"   # یا حذف کن تا آخرین stable بیاره
-          channel: stable
-          
-      - name: Fetch dependencies
-        run: flutter pub get
-
-      - name: Determine version
-        id: ver
+      - name: Set version
         run: |
           echo "RELEASE=web@$(date +%Y-%m-%d_%H-%M-%S)" >> $GITHUB_ENV
           echo "DIST=CI-$(date +%s)" >> $GITHUB_ENV
 
-      - name: Build Flutter Web with source maps
+      - name: Build project with Docker
         run: |
-          flutter build web \
-            --release \
-            --source-maps \
-            --base-href "/flutter_web_sentry/" \
-            --dart-define=SENTRY_RELEASE=$RELEASE \
-            --dart-define=SENTRY_DIST=$DIST
+          docker build \
+            --build-arg SENTRY_RELEASE=$RELEASE \
+            --build-arg SENTRY_DIST=$DIST \
+            --build-arg SENTRY_AUTH_TOKEN=${{ secrets.SENTRY_AUTH_TOKEN }} \
+            --build-arg SENTRY_ORG=$SENTRY_ORG \
+            --build-arg SENTRY_PROJECT=$SENTRY_PROJECT \
+            -t flutter-web-build .
 
-      - name: Install Sentry CLI  
-        run: curl -sL https://sentry.io/get-cli/ | bash
-
-      - name: Inject debugId into built files
-        run: |
-          sentry-cli sourcemaps inject ./build/web --ext js --ext mjs --ext map
-
-      - name: Upload source maps to Sentry
-        run: |
-          sentry-cli releases --org "$SENTRY_ORG" --project "$SENTRY_PROJECT" new "$RELEASE"
-          sentry-cli releases --org "$SENTRY_ORG" --project "$SENTRY_PROJECT" files "$RELEASE" upload-sourcemaps ./build/web \
-            --ext js --ext mjs --ext map --rewrite --dist "$DIST"
-          sentry-cli releases --org "$SENTRY_ORG" --project "$SENTRY_PROJECT" finalize "$RELEASE"
+          container_id=$(docker create flutter-web-build)
+          docker cp $container_id:/dist ./dist
+          docker rm $container_id
 
       - name: Setup Pages
         uses: actions/configure-pages@v4
-        
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: './build/web'
-          
+          path: './dist'
+
   deploy:
     environment:
       name: github-pages

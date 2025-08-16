@@ -1,36 +1,53 @@
-# ---------- Stage 1: Build Flutter Web ----------
-ARG FLUTTER_VERSION=stable
-FROM ghcr.io/cirruslabs/flutter:${FLUTTER_VERSION} AS builder
-WORKDIR /app
+# Stage 1: Flutter Web build
+FROM debian:bookworm-slim AS builder
+
+# Install system dependencies and Sentry CLI
+RUN apt-get update && apt-get install -y git curl unzip xz-utils && rm -rf /var/lib/apt/lists/*
+RUN curl -sL https://sentry.io/get-cli/ | bash
+
+ENV PUB_HOSTED_URL=https://pub.flutter-io.cn
+ENV FLUTTER_STORAGE_BASE_URL=https://storage.flutter-io.cn
+
+RUN git clone https://github.com/flutter/flutter.git /usr/local/flutter
+ENV PATH="/usr/local/flutter/bin:/usr/local/flutter/bin/cache/dart-sdk/bin:${PATH}"
 
 RUN flutter config --enable-web
 
-# Caching: اول فقط pubspec ها
-COPY pubspec.yaml pubspec.lock* ./
-RUN flutter pub get
-
-# بقیه سورس
+WORKDIR /app
 COPY . .
 
-# Build args از CI می‌آیند
-ARG BASE_HREF=/
-ARG SENTRY_DSN=
-ARG SENTRY_RELEASE=
-ARG SENTRY_ENV=production
+RUN flutter clean
 
-# Release build + sourcemaps + dart-define ها
-RUN flutter build web --release \
+# Build with source maps
+ARG SENTRY_RELEASE
+ARG SENTRY_DIST
+ARG SENTRY_AUTH_TOKEN
+ARG SENTRY_ORG
+ARG SENTRY_PROJECT
+
+ENV SENTRY_AUTH_TOKEN=${SENTRY_AUTH_TOKEN}
+ENV SENTRY_ORG=${SENTRY_ORG}
+ENV SENTRY_PROJECT=${SENTRY_PROJECT}
+ENV SENTRY_RELEASE=${SENTRY_RELEASE}
+ENV SENTRY_DIST=${SENTRY_DIST}
+
+RUN flutter pub get && flutter build web \
+    --release \
     --source-maps \
-    --dart-define=SENTRY_DSN=${SENTRY_DSN} \
+    --base-href "/flutter_web_sentry/" \
     --dart-define=SENTRY_RELEASE=${SENTRY_RELEASE} \
-    --dart-define=SENTRY_ENV=${SENTRY_ENV}
+    --dart-define=SENTRY_DIST=${SENTRY_DIST}
 
-# ---------- Stage 2: Artifact for GitHub Pages ----------
-FROM scratch AS artifact
-COPY --from=builder /app/build/web/ /
+# Inject debugId
+RUN sentry-cli sourcemaps inject ./build/web --ext js --ext mjs --ext map
 
-# ---------- Stage 3: Optional Nginx runtime ----------
-# FROM nginx:alpine AS runtime
-# COPY --from=builder /app/build/web /usr/share/nginx/html
-# EXPOSE 80
-# CMD ["nginx", "-g", "daemon off;"]
+# Upload source maps to Sentry
+RUN sentry-cli releases --org "$SENTRY_ORG" --project "$SENTRY_PROJECT" new "$SENTRY_RELEASE" && \
+    sentry-cli releases --org "$SENTRY_ORG" --project "$SENTRY_PROJECT" files "$SENTRY_RELEASE" upload-sourcemaps ./build/web \
+      --ext js --ext mjs --ext map --rewrite --dist "$SENTRY_DIST" && \
+    sentry-cli releases --org "$SENTRY_ORG" --project "$SENTRY_PROJECT" finalize "$SENTRY_RELEASE"
+
+# Stage 2: Export build only (no nginx, for GitHub Pages)
+FROM alpine:3.18 AS export
+WORKDIR /dist
+COPY --from=builder /app/build/web .
