@@ -16,6 +16,7 @@ concurrency:
 
 env:
   SENTRY_ENV: production
+  # مقدار پیش‌فرض؛ در قدم بعدی خودکار بازنویسی می‌شود
   BASE_HREF: "/flutter_web_sentry/"
 
 jobs:
@@ -24,7 +25,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # BASE_HREF را خودکار از نام ریپو بساز
+      # 1) BASE_HREF را خودکار از نام ریپو بساز (OWNER.github.io => / ; پروژه‌ای => /<repo>/)
       - name: Compute BASE_HREF
         run: |
           REPO="${{ github.event.repository.name }}"
@@ -34,25 +35,35 @@ jobs:
           else
             echo "BASE_HREF=/$REPO/" >> $GITHUB_ENV
           fi
+          echo "BASE_HREF=$(grep BASE_HREF $GITHUB_ENV | cut -d= -f2)"
 
-
-      # Release و DistDir را همین‌جا تولید کن (بدون اتکا به ENV ورودی)
-
+      # 2) Release و DistDir را همین‌جا تولید کن
       - name: Compute release & dist
         run: |
           SHORT_SHA="${GITHUB_SHA::7}"
           TS="$(date -u +%Y%m%d-%H%M%S)"
           echo "SENTRY_RELEASE=web-${SHORT_SHA}-${TS}" >> $GITHUB_ENV
           echo "DIST_DIR=dist-${SHORT_SHA}" >> $GITHUB_ENV
-          echo "SENTRY_RELEASE=$(cat $GITHUB_ENV | grep SENTRY_RELEASE | cut -d= -f2)"
-          echo "DIST_DIR=$(cat $GITHUB_ENV | grep DIST_DIR | cut -d= -f2)"
+          echo "SENTRY_RELEASE=$(grep SENTRY_RELEASE $GITHUB_ENV | cut -d= -f2)"
+          echo "DIST_DIR=$(grep DIST_DIR $GITHUB_ENV | cut -d= -f2)"
+
+      # 3) DSN را از Secrets/Vars حل کن (fallback مطمئن)
+      - name: Resolve SENTRY_DSN
+        run: |
+          if [ -n "${{ secrets.SENTRY_DSN }}" ]; then
+            echo "SENTRY_DSN=${{ secrets.SENTRY_DSN }}" >> $GITHUB_ENV
+          elif [ -n "${{ vars.SENTRY_DSN }}" ]; then
+            echo "SENTRY_DSN=${{ vars.SENTRY_DSN }}" >> $GITHUB_ENV
+          else
+            echo "::error::SENTRY_DSN is not set (secret or variable)"; exit 1
+          fi
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # بیلد استیج artifact و استخراج فایل‌ها در DIST_DIR (تولیدشده)
+      # 4) بیلد استیج artifact و استخراج فایل‌ها در DIST_DIR
       - name: Build artifact with Docker and export files
         uses: docker/build-push-action@v6
         with:
@@ -63,43 +74,53 @@ jobs:
           build-args: |
             FLUTTER_VERSION=stable
             BASE_HREF=${{ env.BASE_HREF }}
-            SENTRY_DSN=${{ secrets.SENTRY_DSN || vars.SENTRY_DSN }}
-            SENTRY_ENV=production
+            SENTRY_DSN=${{ env.SENTRY_DSN }}
+            SENTRY_ENV=${{ env.SENTRY_ENV }}
             SENTRY_RELEASE=${{ env.SENTRY_RELEASE }}
           outputs: type=local,dest=${{ env.DIST_DIR }}
 
-      # # SPA fix
-      # - name: Add 404.html for SPA
-      #   run: cp "${{ env.DIST_DIR }}/index.html" "${{ env.DIST_DIR }}/404.html"
+      # 5) SPA fix: 404.html = index.html
+      - name: Add 404.html for SPA
+        run: cp "${{ env.DIST_DIR }}/index.html" "${{ env.DIST_DIR }}/404.html"
 
-      # Install sentry-cli
+      # 6) sanity check: فایل‌های کلیدی واقعاً وجود دارند؟
+      - name: Sanity check built files
+        run: |
+          ls -la "${DIST_DIR}"
+          test -f "${DIST_DIR}/index.html"
+          test -f "${DIST_DIR}/flutter_bootstrap.js"
+          # اگر manifest.json نداری این خط fail می‌کند؛ در این صورت فایل web/manifest.json را اضافه کن
+          test -f "${DIST_DIR}/manifest.json"
+
+      # 7) نصب sentry-cli
       - name: Install sentry-cli
         run: |
           curl -sL https://sentry.io/get-cli/ | bash
           echo "$HOME/.sentrycli/bin" >> $GITHUB_PATH
 
+      # 8) دیباگ اتصال (اختیاری ولی مفید)
       - name: Verify Sentry auth (debug)
         env:
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
-        run: |
-          # وضعیت لاگین و دامنه پیش‌فرض را چک می‌کند (توکن در لاگ چاپ نمی‌شود)
-          sentry-cli info
+          SENTRY_ORG:        ${{ secrets.SENTRY_ORG }}
+        run: sentry-cli info
 
+      # 9) ساخت Release، آپلود سورس‌مپ، finalize و ثبت deploy
       - name: Create release, upload sourcemaps, finalize & deploy
         env:
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
           SENTRY_ORG:        ${{ secrets.SENTRY_ORG }}
           SENTRY_PROJECT:    ${{ secrets.SENTRY_PROJECT }}
         run: |
-          echo "🔧 Release=${SENTRY_RELEASE}, Env=${SENTRY_ENV}, BASE_HREF=${BASE_HREF}, DIR=${DIST_DIR}"
+          echo "🔧 Release=${SENTRY_RELEASE}  Env=${SENTRY_ENV}  BASE_HREF=${BASE_HREF}  DIR=${DIST_DIR}"
 
-          # 1) ایجاد ریلیز و اتصال به پروژه
+          # ساخت ریلیز و اتصال به پروژه
           sentry-cli releases new -p "$SENTRY_PROJECT" "$SENTRY_RELEASE"
 
-          # 2) (اختیاری) اتصال خودکار به کمیت‌ها
+          # (اختیاری) اتصال به کامیت‌ها
           # sentry-cli releases set-commits "$SENTRY_RELEASE" --auto
 
-          # 3) آپلود سورس‌مپ‌ها
+          # آپلود sourcemaps با url-prefix مطابق base-href
           sentry-cli sourcemaps upload \
             --org "$SENTRY_ORG" \
             --project "$SENTRY_PROJECT" \
@@ -109,10 +130,11 @@ jobs:
             --validate \
             "${DIST_DIR}"
 
-          # 4) نهایی‌سازی و ثبت دیپلوی
+          # finalize و ثبت deploy
           sentry-cli releases finalize "$SENTRY_RELEASE"
           sentry-cli releases deploys "$SENTRY_RELEASE" new -e "$SENTRY_ENV"
 
+      # 10) آپلود برای Pages
       - name: Upload artifact to GitHub Pages
         uses: actions/upload-pages-artifact@v3
         with:
