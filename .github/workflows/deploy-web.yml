@@ -31,7 +31,7 @@ jobs:
           if [ "$REPO" = "${OWNER}.github.io" ]; then
             echo "BASE_HREF=/" >> $GITHUB_ENV
           else
-            echo "BASE_HREF=/$REPO/" >> $GITHUB_ENV
+            echo "BASE_HREF=/" >> $GITHUB_ENV
           fi
 
 
