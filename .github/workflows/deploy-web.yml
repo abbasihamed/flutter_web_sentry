@@ -13,8 +13,8 @@ jobs:
   build-and-upload:
     runs-on: ubuntu-latest
     env:
-      SENTRY_ORG: your-org-slug
-      SENTRY_PROJECT: your-project-slug
+      SENTRY_ORG: hamed-xx
+      SENTRY_PROJECT: flutter_test
       SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
     steps:
       - uses: actions/checkout@v4
