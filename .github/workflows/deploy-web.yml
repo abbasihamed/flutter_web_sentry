@@ -39,10 +39,11 @@ jobs:
           flutter build web \
             --release \
             --source-maps \
+            --base-href "/flutter_web_sentry/" \
             --dart-define=SENTRY_RELEASE=$RELEASE \
             --dart-define=SENTRY_DIST=$DIST
 
-      - name: Install Sentry CLI
+      - name: Install Sentry CLI  
         run: curl -sL https://sentry.io/get-cli/ | bash
 
       - name: Inject debugId into built files
