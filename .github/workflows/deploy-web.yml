@@ -76,18 +76,28 @@ jobs:
           curl -sL https://sentry.io/get-cli/ | bash
           echo "$HOME/.sentrycli/bin" >> $GITHUB_PATH
 
-      # Upload sourcemaps via sentry-cli (Release از مرحله قبل تولید شده)
-      - name: Upload sourcemaps to Sentry
+      - name: Verify Sentry auth (debug)
         env:
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
-          SENTRY_ORG:        hamed-xx
-          SENTRY_PROJECT:    flutter_test
+        run: |
+          # وضعیت لاگین و دامنه پیش‌فرض را چک می‌کند (توکن در لاگ چاپ نمی‌شود)
+          sentry-cli info
+
+      - name: Create release, upload sourcemaps, finalize & deploy
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG:        ${{ secrets.SENTRY_ORG }}
+          SENTRY_PROJECT:    ${{ secrets.SENTRY_PROJECT }}
         run: |
           echo "🔧 Release=${SENTRY_RELEASE}, Env=${SENTRY_ENV}, BASE_HREF=${BASE_HREF}, DIR=${DIST_DIR}"
-          # اگر ریپو به Sentry متصل است می‌توان set-commits را هم انجام داد:
-          # sentry-cli releases new -p "$SENTRY_PROJECT" "$SENTRY_RELEASE"
+
+          # 1) ایجاد ریلیز و اتصال به پروژه
+          sentry-cli releases new -p "$SENTRY_PROJECT" "$SENTRY_RELEASE"
+
+          # 2) (اختیاری) اتصال خودکار به کمیت‌ها
           # sentry-cli releases set-commits "$SENTRY_RELEASE" --auto
 
+          # 3) آپلود سورس‌مپ‌ها
           sentry-cli sourcemaps upload \
             --org "$SENTRY_ORG" \
             --project "$SENTRY_PROJECT" \
@@ -97,6 +107,7 @@ jobs:
             --validate \
             "${DIST_DIR}"
 
+          # 4) نهایی‌سازی و ثبت دیپلوی
           sentry-cli releases finalize "$SENTRY_RELEASE"
           sentry-cli releases deploys "$SENTRY_RELEASE" new -e "$SENTRY_ENV"
 
