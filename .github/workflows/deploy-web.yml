@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       SENTRY_ORG: hamed-xx            # اینجا slug واقعی سازمانت
-      SENTRY_PROJECT: flutter-web     # اینجا slug واقعی پروژه‌ت
+      SENTRY_PROJECT: flutter_test     # اینجا slug واقعی پروژه‌ت
       SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
     steps:
       - uses: actions/checkout@v4
