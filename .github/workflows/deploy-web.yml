@@ -33,7 +33,7 @@ jobs:
           else
             echo "BASE_HREF=/$REPO/" >> $GITHUB_ENV
           fi
-          echo "BASE_HREF=$(cat $GITHUB_ENV | grep BASE_HREF | cut -d= -f2)"
+
 
       # Release و DistDir را همین‌جا تولید کن (بدون اتکا به ENV ورودی)
       - name: Compute release & dist
