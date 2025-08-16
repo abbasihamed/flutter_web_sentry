@@ -1,69 +1,180 @@
-name: Flutter Web → Sentry and GitHub Pages
+# name: Flutter Web → Sentry and GitHub Pages
+
+# on:
+#   push:
+#     branches: [main]
+
+# permissions:
+#   contents: read
+#   pages: write
+#   id-token: write
+
+# jobs:
+#   build-and-upload:
+#     runs-on: ubuntu-latest
+#     env:
+#       SENTRY_ORG: your-org-slug
+#       SENTRY_PROJECT: your-project-slug
+#       SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+#     steps:
+#       - uses: actions/checkout@v4
+
+#       - name: Set up Flutter
+#         uses: subosito/flutter-action@v2
+#         with:
+#           flutter-version: "3.32.0"   # or omit this line to get the latest stable
+#           channel: stable
+
+#       - name: Fetch dependencies
+#         run: flutter pub get
+
+#       - name: Determine version
+#         id: ver
+#         run: |
+#           echo "RELEASE=web@$(date +%Y-%m-%d_%H-%M-%S)" >> $GITHUB_ENV
+#           echo "DIST=CI-$(date +%s)" >> $GITHUB_ENV
+
+#       - name: Build Flutter Web with source maps
+#         run: |
+#           flutter build web \
+#             --release \
+#             --source-maps \
+#             --dart-define=SENTRY_RELEASE=$RELEASE \
+#             --dart-define=SENTRY_DIST=$DIST
+
+#       - name: Upload source maps to Sentry
+#         run: |
+#           flutter pub run sentry_dart_plugin \
+#             --sentry-define=release=$RELEASE \
+#             --sentry-define=dist=$DIST \
+#             --sentry-define=upload_source_maps=true \
+#             --sentry-define=auth_token=$SENTRY_AUTH_TOKEN
+
+#       - name: Setup Pages
+#         uses: actions/configure-pages@v4
+
+#       - name: Upload artifact
+#         uses: actions/upload-pages-artifact@v3
+#         with:
+#           path: './build/web'
+
+#   deploy:
+#     environment:
+#       name: github-pages
+#       url: ${{ steps.deployment.outputs.page_url }}
+#     runs-on: ubuntu-latest
+#     needs: build-and-upload
+#     steps:
+#       - name: Deploy to GitHub Pages
+#         id: deployment
+#         uses: actions/deploy-pages@v4
+name: Build & Deploy (Docker) + Sentry CLI
 
 on:
   push:
-    branches: [main]
+    branches: ["main"]
+  workflow_dispatch:
 
 permissions:
   contents: read
   pages: write
   id-token: write
 
+concurrency:
+  group: "pages"
+  cancel-in-progress: true
+
+env:
+  SENTRY_ENV: production
+  SENTRY_RELEASE: ${{ github.sha }}
+
 jobs:
-  build-and-upload:
+  build-pages:
     runs-on: ubuntu-latest
-    env:
-      SENTRY_ORG: your-org-slug
-      SENTRY_PROJECT: your-project-slug
-      SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Flutter
-        uses: subosito/flutter-action@v2
+      # Compute BASE_HREF automatically
+      - name: Compute BASE_HREF
+        run: |
+          REPO="${{ github.event.repository.name }}"
+          OWNER="${{ github.repository_owner }}"
+          if [ "$REPO" = "${OWNER}.github.io" ]; then
+            echo "BASE_HREF=/" >> $GITHUB_ENV
+          else
+            echo "BASE_HREF=/$REPO/" >> $GITHUB_ENV
+          fi
+          echo "BASE_HREF set to: $(cat $GITHUB_ENV | grep BASE_HREF | cut -d= -f2)"
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Build artifact (Docker target=artifact) and export files to dist/
+      - name: Build artifact with Docker and export files
+        uses: docker/build-push-action@v6
         with:
-          flutter-version: "3.32.0"   # or omit this line to get the latest stable
-          channel: stable
-          
-      - name: Fetch dependencies
-        run: flutter pub get
+          context: .
+          file: ./Dockerfile
+          target: artifact
+          push: false
+          build-args: |
+            FLUTTER_VERSION=stable
+            # BASE_HREF=${{ env.BASE_HREF }}
+            SENTRY_DSN=${{ secrets.SENTRY_DSN || vars.SENTRY_DSN }}
+            SENTRY_ENV=${{ env.SENTRY_ENV }}
+            SENTRY_RELEASE=${{ env.SENTRY_RELEASE }}
+          outputs: type=local,dest=./dist
 
-      - name: Determine version
-        id: ver
-        run: |
-          echo "RELEASE=web@$(date +%Y-%m-%d_%H-%M-%S)" >> $GITHUB_ENV
-          echo "DIST=CI-$(date +%s)" >> $GITHUB_ENV
+      # SPA fix (refresh shouldn't 404)
+      - name: Add 404.html for SPA
+        run: cp dist/index.html dist/404.html
 
-      - name: Build Flutter Web with source maps
+      # Install sentry-cli (binary)
+      - name: Install sentry-cli
         run: |
-          flutter build web \
-            --release \
-            --source-maps \
-            --dart-define=SENTRY_RELEASE=$RELEASE \
-            --dart-define=SENTRY_DIST=$DIST
+          curl -sL https://sentry.io/get-cli/ | bash
+          echo "$HOME/.sentrycli/bin" >> $GITHUB_PATH
 
-      - name: Upload source maps to Sentry
+      # Create release, upload sourcemaps, finalize, create deploy
+      - name: Upload sourcemaps to Sentry (sentry-cli)
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
         run: |
-          flutter pub run sentry_dart_plugin \
-            --sentry-define=release=$RELEASE \
-            --sentry-define=dist=$DIST \
-            --sentry-define=upload_source_maps=true \
-            --sentry-define=auth_token=$SENTRY_AUTH_TOKEN
-            
-      - name: Setup Pages
-        uses: actions/configure-pages@v4
-        
-      - name: Upload artifact
+          echo "🔧 Release=${SENTRY_RELEASE}, Env=${SENTRY_ENV}, BASE_HREF=${BASE_HREF}"
+          # (اختیاری) اگر Repo را به Sentry وصل کردید، set-commits را فعال کنید:
+          # sentry-cli releases new -p "$SENTRY_PROJECT" "$SENTRY_RELEASE"
+          # sentry-cli releases set-commits "$SENTRY_RELEASE" --auto
+
+          # Upload sourcemaps for Flutter Web build
+          # url-prefix باید دقیقا معادل public path باشد:
+          sentry-cli sourcemaps upload \
+            --org "$SENTRY_ORG" \
+            --project "$SENTRY_PROJECT" \
+            --release "$SENTRY_RELEASE" \
+            --url-prefix "~/" \
+            --rewrite \
+            --validate \
+            dist
+
+          # Finalize + register deploy
+          sentry-cli releases finalize "$SENTRY_RELEASE"
+          sentry-cli releases deploys "$SENTRY_RELEASE" new -e "$SENTRY_ENV"
+
+      - name: Upload artifact to GitHub Pages
         uses: actions/upload-pages-artifact@v3
         with:
-          path: './build/web'
-          
+          path: dist
+
   deploy:
+    runs-on: ubuntu-latest
+    needs: build-pages
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
-    runs-on: ubuntu-latest
-    needs: build-and-upload
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
