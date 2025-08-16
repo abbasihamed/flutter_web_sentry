@@ -12,7 +12,6 @@ import file_picker
 import file_selector_macos
 import irondash_engine_context
 import just_audio
-import package_info_plus
 import path_provider_foundation
 import printing
 import quill_native_bridge_macos
