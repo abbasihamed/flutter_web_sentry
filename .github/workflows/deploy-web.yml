@@ -1,9 +1,8 @@
-name: Flutter Web → Sentry (CLI) & GitHub Pages
+name: Flutter Web → Sentry and GitHub Pages
 
 on:
   push:
-    branches: [ main ]
-  workflow_dispatch:
+    branches: [main]
 
 permissions:
   contents: read
@@ -14,112 +13,54 @@ jobs:
   build-and-upload:
     runs-on: ubuntu-latest
     env:
-      # مقادیر Sentry را از Secrets/Vars ریپو بخوان
-      SENTRY_ORG: ${{ secrets.SENTRY_ORG || vars.SENTRY_ORG }}
-      SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT || vars.SENTRY_PROJECT }}
+      SENTRY_ORG: your-org-slug
+      SENTRY_PROJECT: your-project-slug
       SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
-      SENTRY_ENV: production
-      BASE_HREF: "/"   # ← طبق خواسته‌ٔ شما
-
     steps:
       - uses: actions/checkout@v4
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
+          flutter-version: "3.32.0"   # or omit this line to get the latest stable
           channel: stable
-          # flutter-version: "3.32.0"  # در صورت نیاز پین کن
-
-      - name: Resolve SENTRY_DSN
-        run: |
-          if [ -n "${{ secrets.SENTRY_DSN }}" ]; then
-            echo "SENTRY_DSN=${{ secrets.SENTRY_DSN }}" >> $GITHUB_ENV
-          elif [ -n "${{ vars.SENTRY_DSN }}" ]; then
-            echo "SENTRY_DSN=${{ vars.SENTRY_DSN }}" >> $GITHUB_ENV
-          else
-            echo "::error::SENTRY_DSN is not set (secret or variable)"; exit 1
-          fi
-
+          
       - name: Fetch dependencies
         run: flutter pub get
 
-      - name: Determine release & dist
+      - name: Determine version
+        id: ver
         run: |
-          SHORT_SHA="${GITHUB_SHA::7}"
-          TS="$(date -u +%Y%m%d-%H%M%S)"
-          echo "RELEASE=web-${SHORT_SHA}-${TS}" >> $GITHUB_ENV
-          echo "DIST=ci-${SHORT_SHA}" >> $GITHUB_ENV
+          echo "RELEASE=web@$(date +%Y-%m-%d_%H-%M-%S)" >> $GITHUB_ENV
+          echo "DIST=CI-$(date +%s)" >> $GITHUB_ENV
 
-      - name: Build Flutter Web (with source maps)
+      - name: Build Flutter Web with source maps
         run: |
           flutter build web \
             --release \
             --source-maps \
-            --base-href "${BASE_HREF}" \
-            --dart-define=SENTRY_DSN=${SENTRY_DSN} \
-            --dart-define=SENTRY_RELEASE=${RELEASE} \
-            --dart-define=SENTRY_ENV=${SENTRY_ENV} \
-            --dart-define=SENTRY_DIST=${DIST}
+            --dart-define=SENTRY_RELEASE=$RELEASE \
+            --dart-define=SENTRY_DIST=$DIST
 
-      # SPA fix: جلوگیری از 404 در رفرش مسیرهای داخلی
-      - name: Add 404.html for SPA
-        run: cp build/web/index.html build/web/404.html
+      - name: Install Sentry CLI
+        run: curl -sL https://sentry.io/get-cli/ | bash
 
-      # نصب sentry-cli و لاگ وضعیت
-      - name: Install sentry-cli
+      - name: Upload source maps to Sentry
         run: |
-          curl -sL https://sentry.io/get-cli/ | bash
-          echo "$HOME/.sentrycli/bin" >> $GITHUB_PATH
-      - name: sentry-cli info
-        env:
-          SENTRY_AUTH_TOKEN: ${{ env.SENTRY_AUTH_TOKEN }}
-        run: sentry-cli info
-
-      # ساخت ریلیز، آپلود sourcemaps، finalize و ثبت deploy
-      - name: Upload sourcemaps via sentry-cli
-        env:
-          SENTRY_AUTH_TOKEN: ${{ env.SENTRY_AUTH_TOKEN }}
-          SENTRY_ORG:        ${{ env.SENTRY_ORG }}
-          SENTRY_PROJECT:    ${{ env.SENTRY_PROJECT }}
-          RELEASE:           ${{ env.RELEASE }}
-          DIST:              ${{ env.DIST }}
-          BASE_HREF:         ${{ env.BASE_HREF }}
-          SENTRY_ENV:        ${{ env.SENTRY_ENV }}
-        run: |
-          set -e
-          echo "Release=$RELEASE  Dist=$DIST  Env=$SENTRY_ENV  Base=$BASE_HREF"
-
-          # 1) ایجاد ریلیز و اتصال به پروژه
-          sentry-cli releases new -p "$SENTRY_PROJECT" "$RELEASE"
-
-          # 2) (اختیاری) اتصال کمیت‌ها
-          # sentry-cli releases set-commits "$RELEASE" --auto
-
-          # 3) آپلود سورس‌مپ‌ها از build/web
-          # اگر base="/" است، url-prefix حتما "~/" باشد.
-          sentry-cli sourcemaps upload \
-            --org "$SENTRY_ORG" \
-            --project "$SENTRY_PROJECT" \
-            --release "$RELEASE" \
-            --dist "$DIST" \
-            --url-prefix "~/" \
-            --rewrite \
-            --validate \
-            build/web
-
-          # 4) نهایی‌سازی و ثبت دیپلوی
+          sentry-cli releases new "$RELEASE"
+          sentry-cli releases set-dist "$RELEASE" "$DIST"
+          sentry-cli releases files "$RELEASE" upload-sourcemaps ./build/web \
+            --ext js --ext map --rewrite --dist "$DIST"
           sentry-cli releases finalize "$RELEASE"
-          sentry-cli releases deploys "$RELEASE" new -e "$SENTRY_ENV"
-
-      # GitHub Pages
+            
       - name: Setup Pages
         uses: actions/configure-pages@v4
-
+        
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: build/web
-
+          path: './build/web'
+          
   deploy:
     environment:
       name: github-pages
