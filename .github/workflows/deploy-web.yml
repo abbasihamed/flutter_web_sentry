@@ -24,15 +24,15 @@ jobs:
       - uses: actions/checkout@v4
 
       # BASE_HREF را خودکار از نام ریپو بساز
-      - name: Compute BASE_HREF
-        run: |
-          REPO="${{ github.event.repository.name }}"
-          OWNER="${{ github.repository_owner }}"
-          if [ "$REPO" = "${OWNER}.github.io" ]; then
-            echo "BASE_HREF=/" >> $GITHUB_ENV
-          else
-            echo "BASE_HREF=/" >> $GITHUB_ENV
-          fi
+    - name: Compute BASE_HREF
+      run: |
+        REPO="${{ github.event.repository.name }}"
+        OWNER="${{ github.repository_owner }}"
+        if [ "$REPO" = "${OWNER}.github.io" ]; then
+          echo "BASE_HREF=/" >> $GITHUB_ENV
+        else
+          echo "BASE_HREF=/$REPO/" >> $GITHUB_ENV
+        fi
 
 
       # Release و DistDir را همین‌جا تولید کن (بدون اتکا به ENV ورودی)
