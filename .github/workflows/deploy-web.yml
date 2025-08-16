@@ -16,6 +16,7 @@ concurrency:
 
 env:
   SENTRY_ENV: production
+  BASE_HREF: "/flutter_web_sentry/"
 
 jobs:
   build-pages:
@@ -36,6 +37,7 @@ jobs:
 
 
       # Release و DistDir را همین‌جا تولید کن (بدون اتکا به ENV ورودی)
+
       - name: Compute release & dist
         run: |
           SHORT_SHA="${GITHUB_SHA::7}"
@@ -62,7 +64,7 @@ jobs:
             FLUTTER_VERSION=stable
             BASE_HREF=${{ env.BASE_HREF }}
             SENTRY_DSN=${{ secrets.SENTRY_DSN || vars.SENTRY_DSN }}
-            SENTRY_ENV=${{ env.SENTRY_ENV }}
+            SENTRY_ENV=production
             SENTRY_RELEASE=${{ env.SENTRY_RELEASE }}
           outputs: type=local,dest=${{ env.DIST_DIR }}
 
