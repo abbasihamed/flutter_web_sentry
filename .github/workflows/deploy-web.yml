@@ -13,8 +13,8 @@ jobs:
   build-and-upload:
     runs-on: ubuntu-latest
     env:
-      SENTRY_ORG: hamed-xx
-      SENTRY_PROJECT: flutter_test
+      SENTRY_ORG: hamed-xx            # اینجا slug واقعی سازمانت
+      SENTRY_PROJECT: flutter-web     # اینجا slug واقعی پروژه‌ت
       SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
     steps:
       - uses: actions/checkout@v4
@@ -22,7 +22,7 @@ jobs:
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: "3.32.0"   # or omit this line to get the latest stable
+          flutter-version: "3.32.0"   # یا حذف کن تا آخرین stable بیاره
           channel: stable
           
       - name: Fetch dependencies
@@ -51,13 +51,11 @@ jobs:
 
       - name: Upload source maps to Sentry
         run: |
-          sentry-cli --org "$SENTRY_ORG" --project "$SENTRY_PROJECT" releases new "$RELEASE"
-          sentry-cli --org "$SENTRY_ORG" --project "$SENTRY_PROJECT" releases files "$RELEASE" upload-sourcemaps ./build/web \
+          sentry-cli releases --org "$SENTRY_ORG" --project "$SENTRY_PROJECT" new "$RELEASE"
+          sentry-cli releases --org "$SENTRY_ORG" --project "$SENTRY_PROJECT" files "$RELEASE" upload-sourcemaps ./build/web \
             --ext js --ext mjs --ext map --rewrite --dist "$DIST"
-          sentry-cli --org "$SENTRY_ORG" --project "$SENTRY_PROJECT" releases finalize "$RELEASE"
+          sentry-cli releases --org "$SENTRY_ORG" --project "$SENTRY_PROJECT" finalize "$RELEASE"
 
-
-            
       - name: Setup Pages
         uses: actions/configure-pages@v4
         
