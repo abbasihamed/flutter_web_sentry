@@ -80,8 +80,8 @@ jobs:
       - name: Upload sourcemaps to Sentry
         env:
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
-          SENTRY_ORG:        ${{ secrets.SENTRY_ORG }}
-          SENTRY_PROJECT:    ${{ secrets.SENTRY_PROJECT }}
+          SENTRY_ORG:        hamed-xx
+          SENTRY_PROJECT:    flutter_test
         run: |
           echo "🔧 Release=${SENTRY_RELEASE}, Env=${SENTRY_ENV}, BASE_HREF=${BASE_HREF}, DIR=${DIST_DIR}"
           # اگر ریپو به Sentry متصل است می‌توان set-commits را هم انجام داد:
