@@ -45,13 +45,18 @@ jobs:
       - name: Install Sentry CLI
         run: curl -sL https://sentry.io/get-cli/ | bash
 
+      - name: Inject debugId into built files
+        run: |
+          sentry-cli sourcemaps inject ./build/web --ext js --ext mjs --ext map
+
       - name: Upload source maps to Sentry
         run: |
-          sentry-cli releases new "$RELEASE"
-          sentry-cli releases set-dist "$RELEASE" "$DIST"
-          sentry-cli releases files "$RELEASE" upload-sourcemaps ./build/web \
-            --ext js --ext map --rewrite --dist "$DIST"
-          sentry-cli releases finalize "$RELEASE"
+          sentry-cli --org "$SENTRY_ORG" --project "$SENTRY_PROJECT" releases new "$RELEASE"
+          sentry-cli --org "$SENTRY_ORG" --project "$SENTRY_PROJECT" releases files "$RELEASE" upload-sourcemaps ./build/web \
+            --ext js --ext mjs --ext map --rewrite --dist "$DIST"
+          sentry-cli --org "$SENTRY_ORG" --project "$SENTRY_PROJECT" releases finalize "$RELEASE"
+
+
             
       - name: Setup Pages
         uses: actions/configure-pages@v4
